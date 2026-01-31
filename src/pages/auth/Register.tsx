@@ -8,7 +8,6 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
 import Logo from '@/components/ui/Logo';
-import { useAuth } from '@/contexts/AuthContext';
 
 const registerSchema = z.object({
     name: z.string().min(3, 'Nama minimal 3 karakter'),
@@ -27,7 +26,6 @@ const Register: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
-    const { signUp } = useAuth();
 
     const {
         register,
@@ -41,13 +39,10 @@ const Register: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const { error } = await signUp(data.email, data.password, data.name);
-            if (error) {
-                setError(error.message);
-                return;
-            }
+            console.log('Registering with:', data);
+            await new Promise(resolve => setTimeout(resolve, 2000));
             navigate('/login');
-        } catch (err: any) {
+        } catch {
             setError('Pendaftaran gagal. Email mungkin sudah terdaftar.');
         } finally {
             setIsLoading(false);

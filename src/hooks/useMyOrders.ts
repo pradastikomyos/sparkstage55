@@ -43,10 +43,9 @@ type OrderItemRow = {
 
 export function useMyOrders(userId: string | null | undefined) {
     const queryClient = useQueryClient();
-    const queryKey = ['my-orders', userId];
 
     const query = useQuery({
-        queryKey,
+        queryKey: ['my-orders', userId],
         queryFn: async () => {
             if (!userId) return [];
 
@@ -125,7 +124,7 @@ export function useMyOrders(userId: string | null | undefined) {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'order_products', filter: `user_id=eq.${userId}` },
                 () => {
-                    queryClient.invalidateQueries({ queryKey });
+                    queryClient.invalidateQueries({ queryKey: ['my-orders', userId] });
                 }
             )
             .subscribe();

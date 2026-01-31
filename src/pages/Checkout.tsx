@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MapPin, ChevronRight, ShieldCheck, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { useCart } from '@/hooks/useCart';
-import { useAuth } from '@/contexts/AuthContext';
+import { useCart, type CartItem } from '@/hooks/useCart';
+import { useAuth } from '@/hooks/useAuth';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
@@ -19,13 +19,14 @@ interface TicketCheckoutState {
 }
 
 interface ProductCheckoutState {
-    items: any[];
+    items: Array<Omit<CartItem, 'id'>>;
 }
 
 const Checkout: React.FC = () => {
-    const { items, totalPrice: getCartTotal, clearCart } = useCart();
-    const { user } = useAuth();
-    const isAuthenticated = !!user;
+    const items = useCart((state) => state.items);
+    const clearCart = useCart((state) => state.clearCart);
+    const cartTotal = useCart((state) => state.totalPrice());
+    const { user, isAuthenticated } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
     const location = useLocation();
@@ -34,11 +35,11 @@ const Checkout: React.FC = () => {
     const ticketState = location.state && 'ticket' in location.state ? (location.state as TicketCheckoutState) : null;
     const buyNowItems = location.state && 'items' in location.state ? (location.state as ProductCheckoutState).items : null;
 
-    const checkoutItems = buyNowItems || items;
+    const checkoutItems: Array<CartItem | Omit<CartItem, 'id'>> = buyNowItems || items;
 
     // Mock Address
     const [address, setAddress] = useState({
-        name: (user?.user_metadata?.name as string | undefined) || user?.email?.split('@')[0] || '',
+        name: user?.name || '',
         phone: '',
         street: '',
         city: '',
@@ -47,7 +48,7 @@ const Checkout: React.FC = () => {
 
     const totalPrice = ticketState
         ? ticketState.totalPrice
-        : (buyNowItems ? buyNowItems.reduce((acc, item) => acc + (item.price * item.quantity), 0) : getCartTotal());
+        : (buyNowItems ? buyNowItems.reduce((acc, item) => acc + (item.price * item.quantity), 0) : cartTotal);
 
     const handlePlaceOrder = async () => {
         if (!isAuthenticated || !user) {
@@ -226,7 +227,10 @@ const Checkout: React.FC = () => {
                                     </div>
                                 ) : (
                                     checkoutItems.map((item, idx) => (
-                                        <div key={item.id || idx} className="py-4 flex items-center justify-between">
+                                        <div
+                                            key={'id' in item ? item.id : `${item.productId}-${item.variantId ?? 0}-${idx}`}
+                                            className="py-4 flex items-center justify-between"
+                                        >
                                             <div className="flex items-center gap-4">
                                                 <div className="h-16 w-12 bg-gray-50 flex-shrink-0">
                                                     <img src={item.image} alt={item.name} className="h-full w-full object-cover" />

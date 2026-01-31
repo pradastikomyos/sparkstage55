@@ -23,17 +23,23 @@ interface CartStore {
     totalPrice: () => number;
 }
 
+const getVariantAttributesKey = (variantAttributes: Record<string, string>) => {
+    const keys = Object.keys(variantAttributes).sort();
+    return keys.map((key) => `${key}:${variantAttributes[key]}`).join('|');
+};
+
 export const useCart = create<CartStore>()(
     persist(
         (set, get) => ({
             items: [],
 
             addItem: (item) => {
+                const newVariantAttributesKey = getVariantAttributesKey(item.variantAttributes);
                 const existingItem = get().items.find(
                     (i) =>
                         i.productId === item.productId &&
                         i.variantId === item.variantId &&
-                        JSON.stringify(i.variantAttributes) === JSON.stringify(item.variantAttributes)
+                        getVariantAttributesKey(i.variantAttributes) === newVariantAttributesKey
                 );
 
                 if (existingItem) {
@@ -41,7 +47,7 @@ export const useCart = create<CartStore>()(
                         items: state.items.map((i) =>
                             i.productId === item.productId &&
                                 i.variantId === item.variantId &&
-                                JSON.stringify(i.variantAttributes) === JSON.stringify(item.variantAttributes)
+                                getVariantAttributesKey(i.variantAttributes) === newVariantAttributesKey
                                 ? { ...i, quantity: i.quantity + item.quantity }
                                 : i
                         ),

@@ -11,7 +11,7 @@ import Button from '@/components/ui/Button';
 const Products: React.FC = () => {
     const { data: allProducts = [], isLoading: productsLoading } = useProducts();
     const { data: categoryData = [], isLoading: categoriesLoading } = useCategories();
-    const { addItem } = useCart();
+    const addItem = useCart((state) => state.addItem);
 
     const [search, setSearch] = useState('');
     const [type, setType] = useState('');

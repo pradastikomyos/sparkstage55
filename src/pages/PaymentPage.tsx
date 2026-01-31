@@ -1,23 +1,42 @@
 import { useState, useEffect } from 'react';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ShieldCheck, Lock, Ticket } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
 import Badge from '@/components/ui/Badge';
 import { loadSnapScript } from '@/utils/midtransSnap';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import { SessionErrorHandler } from '@/utils/sessionErrorHandler';
-import { preserveBookingState, type BookingState } from '@/utils/bookingStateManager';
+
+type PaymentRecord = {
+    id: string | number;
+    total_price: number;
+    quantity?: number | null;
+    ticket_id?: number | string | null;
+    status?: string | null;
+    payment_status?: string | null;
+    booking_date?: string | null;
+    time_slot?: string | null;
+    customer_name?: string | null;
+    customer_phone?: string | null;
+    ticket?: {
+        name?: string | null;
+        price?: number | null;
+    } | null;
+};
+
+type SnapPaymentResult = {
+    transaction_id?: string;
+    payment_type?: string;
+} & Record<string, unknown>;
 
 export default function PaymentPage() {
     const { id: reservationId } = useParams<{ id: string }>();
     const [searchParams] = useSearchParams();
     const type = searchParams.get('type') || 'reservation'; // 'reservation' or 'order'
 
-    const location = useLocation();
     const navigate = useNavigate();
     const { user } = useAuth();
 
@@ -27,17 +46,10 @@ export default function PaymentPage() {
     const [snapLoaded, setSnapLoaded] = useState(false);
 
     // Reservation/Order Data
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<PaymentRecord | null>(null);
 
-    const [customerName, setCustomerName] = useState('');
+    const [customerName, setCustomerName] = useState(user?.name || user?.email?.split('@')[0] || '');
     const [customerPhone, setCustomerPhone] = useState('');
-
-    useEffect(() => {
-        // Priority: registered name from metadata > email prefix
-        const nameFromMeta = (user?.user_metadata?.name as string | undefined) || '';
-        const emailPrefix = user?.email ? (user.email.split('@')[0] || '') : '';
-        setCustomerName(nameFromMeta || emailPrefix);
-    }, [user]);
 
     // Load Snap Script
     useEffect(() => {
@@ -58,26 +70,21 @@ export default function PaymentPage() {
             }
 
             try {
-                // Products are stored in order_products (Spark studio backend)
-                let tableName = type === 'reservation' ? 'reservations' : 'order_products';
-                const select = type === 'reservation'
-                    ? '*, ticket:tickets(*)'
-                    : '*, order_product_items(*, product_variants(*))'
-
+                const tableName = type === 'reservation' ? 'reservations' : 'orders';
                 const { data: record, error } = await supabase
                     .from(tableName)
-                    .select(select)
+                    .select('*, ticket:tickets(*)') // Join ticket for name/details
                     .eq('id', reservationId)
                     .single();
 
                 if (error) throw error;
                 if (!record) throw new Error('Record not found');
 
-                setData(record);
+                setData(record as PaymentRecord);
                 if (record.customer_name) setCustomerName(record.customer_name);
                 if (record.customer_phone) setCustomerPhone(record.customer_phone);
 
-            } catch (err: any) {
+            } catch (err) {
                 console.error('Error fetching record:', err);
                 setError('Could not find your booking/order details.');
             } finally {
@@ -98,123 +105,77 @@ export default function PaymentPage() {
         setLoading(true);
         setError(null);
 
-        const errorHandler = new SessionErrorHandler({
-            onSessionExpired: () => {
-                navigate('/login');
-            },
-            preserveState: true
-        });
-
         try {
-            // SUPABASE BEST PRACTICE: Use getUser() to validate and auto-refresh JWT
-            const bookingData: Omit<BookingState, 'timestamp'> = {
-                ticketId: Number(data.ticket_id || 0),
-                ticketName: String(data.ticket?.name || 'Photo Session'),
-                ticketType: String(data.ticket?.type || 'entrance'),
-                price: Number(data.ticket?.price || 0),
-                date: String(data.booking_date || ''),
-                time: String(data.time_slot || ''),
-                quantity: Number(data.quantity || 1),
-                total: Number(data.total_price || 0),
-            };
+            // Get Fresh Session
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Session expired. Please login again.');
 
-            if (type === 'reservation') {
-                preserveBookingState(bookingData);
-            }
-
-            const { data: { user: validatedUser }, error: userError } = await supabase.auth.getUser();
-            if (userError || !validatedUser) {
-                await errorHandler.handleAuthError({ status: 401 }, { returnPath: location.pathname, state: bookingData });
-                setLoading(false);
-                return;
-            }
-
-            const { data: { session: currentSession } } = await supabase.auth.getSession();
-            if (!currentSession) {
-                await errorHandler.handleAuthError({ status: 401 }, { returnPath: location.pathname, state: bookingData });
-                setLoading(false);
-                return;
-            }
-
-            const token = currentSession.access_token;
-
-            // Call Edge Function (contract must match Spark studio)
-            const slug = type === 'reservation' ? 'create-midtrans-token' : 'create-midtrans-product-token';
+            // Call Edge Function
             const response = await fetch(
-                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${slug}`,
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-midtrans-token`,
                 {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
+                        'Authorization': `Bearer ${session.access_token}`,
                     },
-                    body: JSON.stringify(
-                        type === 'reservation'
-                            ? {
-                                items: [
-                                    {
-                                        ticketId: Number(data.ticket_id),
-                                        ticketName: String(data.ticket?.name || 'Photo Session'),
-                                        price: Number(data.ticket?.price || 0),
-                                        quantity: Number(data.quantity || 1),
-                                        date: String(data.booking_date),
-                                        timeSlot: String(data.time_slot),
-                                    },
-                                ],
-                                customerName: customerName.trim(),
-                                customerEmail: user.email,
-                                customerPhone: customerPhone.trim() || undefined,
+                    body: JSON.stringify({
+                        // Common payload structure expected by your generic Edge Function
+                        transactionDetails: {
+                            order_id: type === 'reservation' ? `RES-${data.id}-${Date.now()}` : `ORD-${data.id}-${Date.now()}`,
+                            gross_amount: data.total_price,
+                        },
+                        customerDetails: {
+                            first_name: customerName,
+                            email: user.email,
+                            phone: customerPhone,
+                        },
+                        itemDetails: [
+                            {
+                                id: type === 'reservation' ? data.ticket_id : 'ITEM',
+                                price: data.ticket?.price || data.total_price, // Assuming 1 item type for now
+                                quantity: data.quantity || 1,
+                                name: data.ticket?.name || 'Order Item',
                             }
-                            : {
-                                items: Array.isArray(data.order_product_items)
-                                    ? data.order_product_items.map((row: any) => ({
-                                        productVariantId: Number(row.product_variant_id),
-                                        name: String(row.product_variants?.name || `Variant ${row.product_variant_id}`),
-                                        price: Number(row.price ?? row.product_variants?.price ?? 0),
-                                        quantity: Number(row.quantity ?? 1),
-                                    }))
-                                    : [],
-                                customerName: customerName.trim(),
-                                customerEmail: user.email,
-                                customerPhone: customerPhone.trim() || undefined,
-                            }
-                    ),
+                        ],
+                        // Metadata to link back to our DB record
+                        metadata: {
+                            type,
+                            id: data.id,
+                            user_id: user.id
+                        }
+                    }),
                 }
             );
 
             const result = await response.json();
 
             if (!response.ok) {
-                if (response.status === 401) {
-                    await errorHandler.handleAuthError({ status: 401 }, { returnPath: location.pathname, state: type === 'reservation' ? bookingData : undefined });
-                    return;
-                }
                 throw new Error(result.error || 'Failed to initialize payment');
             }
 
             // Open Snap
             if (window.snap) {
                 window.snap.pay(result.token, {
-                    onSuccess: (paymentResult: any) => {
+                    onSuccess: async (paymentResult: SnapPaymentResult) => {
                         console.log('Payment Success:', paymentResult);
-                        // IMPORTANT: Do NOT mark paid client-side. Rely on midtrans-webhook + sync-midtrans-status.
-                        const orderNumber = String(result.order_number || '');
-                        if (orderNumber) {
-                            navigate(`/booking-success?order_id=${encodeURIComponent(orderNumber)}`, { state: { data, paymentResult } });
-                        } else {
-                            navigate('/booking-success', { state: { data, paymentResult } });
-                        }
+                        // Update status in DB
+                        await supabase
+                            .from(type === 'reservation' ? 'reservations' : 'orders')
+                            .update({
+                                status: 'paid', // or 'confirmed'
+                                payment_id: paymentResult.transaction_id,
+                                payment_method: paymentResult.payment_type
+                            })
+                            .eq('id', data.id);
+
+                        navigate('/booking-success', { state: { data, paymentResult } });
                     },
-                    onPending: (paymentResult: any) => {
+                    onPending: (paymentResult: SnapPaymentResult) => {
                         console.log('Payment Pending:', paymentResult);
-                        const orderNumber = String(result.order_number || '');
-                        if (orderNumber) {
-                            navigate(`/booking-success?order_id=${encodeURIComponent(orderNumber)}`, { state: { data, paymentResult, isPending: true } });
-                        } else {
-                            navigate('/booking-success', { state: { data, paymentResult, isPending: true } });
-                        }
+                        navigate('/booking-success', { state: { data, paymentResult, isPending: true } });
                     },
-                    onError: (paymentResult: any) => {
+                    onError: (paymentResult: SnapPaymentResult) => {
                         console.error('Payment Error:', paymentResult);
                         setError('Payment failed. Please try again.');
                     },
@@ -224,9 +185,9 @@ export default function PaymentPage() {
                 });
             }
 
-        } catch (err: any) {
+        } catch (err) {
             console.error('Payment Error:', err);
-            setError(err.message || 'An unexpected error occurred');
+            setError(err instanceof Error ? err.message : 'An unexpected error occurred');
             setLoading(false);
         }
     };

@@ -8,7 +8,6 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
 import Logo from '@/components/ui/Logo';
-import { useAuth } from '@/contexts/AuthContext';
 
 const loginSchema = z.object({
     email: z.string().email('Alamat email tidak valid'),
@@ -22,7 +21,6 @@ const Login: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
-    const { signIn } = useAuth();
 
     const {
         register,
@@ -36,13 +34,11 @@ const Login: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const { error } = await signIn(data.email, data.password);
-            if (error) {
-                setError(error.message);
-                return;
-            }
+            console.log('Logging in with:', data);
+            // Simulate API call
+            await new Promise(resolve => setTimeout(resolve, 1500));
             navigate('/');
-        } catch (err: any) {
+        } catch {
             setError('Email atau password salah. Silakan coba lagi.');
         } finally {
             setIsLoading(false);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Navigation, Thumbs } from 'swiper/modules';
@@ -19,25 +19,26 @@ const ProductDetail: React.FC = () => {
     const { slug } = useParams<{ slug: string }>();
     const navigate = useNavigate();
     const { data: product, isLoading, error } = useProduct(slug);
-    const { addItem } = useCart();
+    const addItem = useCart((state) => state.addItem);
 
     const [thumbsSwiper, setThumbsSwiper] = useState<SwiperType | null>(null);
     const [quantity, setQuantity] = useState(1);
     const [selectedAttributes, setSelectedAttributes] = useState<Record<string, string>>({});
 
-    // Initialize selected attributes when product loads
-    useEffect(() => {
-        if (product && product.variants.length > 0) {
-            const firstVariant = product.variants[0];
-            const initialAttrs: Record<string, string> = {};
-            Object.entries(firstVariant.attributes).forEach(([key, value]) => {
-                if (key !== 'image_url') {
-                    initialAttrs[key] = String(value);
-                }
-            });
-            setSelectedAttributes(initialAttrs);
-        }
+    const defaultSelectedAttributes = useMemo(() => {
+        if (!product || product.variants.length === 0) return {};
+        const firstVariant = product.variants[0];
+        const initialAttrs: Record<string, string> = {};
+        Object.entries(firstVariant.attributes).forEach(([key, value]) => {
+            if (key !== 'image_url') {
+                initialAttrs[key] = String(value);
+            }
+        });
+        return initialAttrs;
     }, [product]);
+
+    const effectiveSelectedAttributes =
+        Object.keys(selectedAttributes).length > 0 ? selectedAttributes : defaultSelectedAttributes;
 
     // Extract unique attribute values for selection
     const variantAttributes = useMemo(() => {
@@ -61,11 +62,11 @@ const ProductDetail: React.FC = () => {
     const selectedVariant = useMemo(() => {
         if (!product) return null;
         return product.variants.find(v => {
-            return Object.entries(selectedAttributes).every(([key, value]) => {
+            return Object.entries(effectiveSelectedAttributes).every(([key, value]) => {
                 return String(v.attributes[key]) === value;
             });
         });
-    }, [product, selectedAttributes]);
+    }, [product, effectiveSelectedAttributes]);
 
     const isAvailable = selectedVariant && selectedVariant.available > 0;
 
@@ -78,7 +79,7 @@ const ProductDetail: React.FC = () => {
             image: selectedVariant.imageUrl || product.imageUrl || '',
             price: selectedVariant.price,
             quantity: quantity,
-            variantAttributes: selectedAttributes,
+            variantAttributes: effectiveSelectedAttributes,
             type: 'product'
         });
         // Optional: show success toast or redirect to cart
@@ -93,7 +94,7 @@ const ProductDetail: React.FC = () => {
             image: selectedVariant.imageUrl || product.imageUrl || '',
             price: selectedVariant.price,
             quantity: quantity,
-            variantAttributes: selectedAttributes,
+            variantAttributes: effectiveSelectedAttributes,
             type: 'product' as const
         };
         navigate('/checkout', { state: { items: [buyNowItem] } });
@@ -216,7 +217,7 @@ const ProductDetail: React.FC = () => {
                             {Object.entries(variantAttributes).map(([attrKey, attrValues]) => (
                                 <div key={attrKey}>
                                     <label className="block text-sm font-bold text-gray-900 mb-3 uppercase tracking-wider">
-                                        {attrKey}: <span className="text-main-500 font-medium ml-1">{selectedAttributes[attrKey]}</span>
+                                        {attrKey}: <span className="text-main-500 font-medium ml-1">{effectiveSelectedAttributes[attrKey]}</span>
                                     </label>
                                     <div className="flex flex-wrap gap-2">
                                         {attrValues.map((value) => (
@@ -225,7 +226,7 @@ const ProductDetail: React.FC = () => {
                                                 onClick={() => setSelectedAttributes(prev => ({ ...prev, [attrKey]: value }))}
                                                 className={cn(
                                                     "px-6 py-2 border-2 transition-all font-semibold",
-                                                    selectedAttributes[attrKey] === value
+                                                    effectiveSelectedAttributes[attrKey] === value
                                                         ? "border-main-500 bg-main-50 text-main-500 ring-1 ring-main-500"
                                                         : "border-gray-200 hover:border-gray-400 text-gray-600"
                                                 )}

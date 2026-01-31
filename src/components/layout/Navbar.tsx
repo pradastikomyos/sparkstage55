@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ShoppingCart, Menu, X, LogOut, Search, ScanLine } from 'lucide-react';
 import Logo from '@/components/ui/Logo';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/hooks/useAuth';
 import { useCart } from '@/hooks/useCart';
 import { cn } from '@/utils/cn';
 
@@ -10,11 +10,8 @@ const Navbar: React.FC = () => {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const location = useLocation();
-    const { user, signOut, loggingOut } = useAuth();
-    const isAuthenticated = !!user;
-    const { totalItems } = useCart();
-
-    const displayName = (user?.user_metadata?.name as string | undefined) || (user?.email ? (user.email.split('@')[0] || '') : '') || 'User';
+    const { isAuthenticated, user, logout } = useAuth();
+    const totalItems = useCart((state) => state.totalItems());
 
     useEffect(() => {
         const handleScroll = () => {
@@ -51,19 +48,18 @@ const Navbar: React.FC = () => {
                         <div className="hidden md:flex items-center space-x-6 relative z-10">
                             <Link to="/cart" className="relative p-2 group">
                                 <ShoppingCart className="h-6 w-6 text-gray-700 group-hover:text-main-500 transition-colors" />
-                                {totalItems() > 0 && (
+                                {totalItems > 0 && (
                                     <span className="absolute -top-1 -right-1 bg-main-500 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center border-2 border-white tabular-nums">
-                                        {totalItems()}
+                                        {totalItems}
                                     </span>
                                 )}
                             </Link>
 
                             {isAuthenticated ? (
                                 <div className="flex items-center space-x-4">
-                                    <span className="text-sm font-bold text-gray-900">Hi, {displayName}</span>
+                                    <span className="text-sm font-bold text-gray-900">Hi, {user?.name}</span>
                                     <button
-                                        onClick={() => signOut()}
-                                        disabled={loggingOut}
+                                        onClick={() => logout()}
                                         className="p-2 text-gray-700 hover:text-main-500 transition-colors"
                                         title="Logout"
                                     >
@@ -151,16 +147,15 @@ const Navbar: React.FC = () => {
                                 <>
                                     <div className="flex items-center gap-4">
                                         <div className="h-12 w-12 rounded-full bg-main-100 flex items-center justify-center text-main-500 font-bold text-xl">
-                                            {displayName.charAt(0)}
+                                            {user?.name.charAt(0)}
                                         </div>
                                         <div>
-                                            <p className="font-bold text-gray-900">{displayName}</p>
+                                            <p className="font-bold text-gray-900">{user?.name}</p>
                                             <p className="text-sm text-gray-500">{user?.email}</p>
                                         </div>
                                     </div>
                                     <button
-                                        onClick={() => { signOut(); setIsOpen(false); }}
-                                        disabled={loggingOut}
+                                        onClick={() => { logout(); setIsOpen(false); }}
                                         className="w-full px-6 py-4 bg-gray-100 text-gray-900 font-bold uppercase tracking-widest text-center"
                                     >
                                         Sign Out
@@ -180,7 +175,7 @@ const Navbar: React.FC = () => {
                                 className="flex items-center justify-between w-full px-6 py-4 border-2 border-gray-900 font-bold uppercase tracking-widest"
                                 onClick={() => setIsOpen(false)}
                             >
-                                Cart ({totalItems()})
+                                Cart ({totalItems})
                                 <ShoppingCart className="h-5 w-5" />
                             </Link>
                         </div>

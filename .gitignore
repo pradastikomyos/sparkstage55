@@ -12,17 +12,7 @@ dist
 dist-ssr
 *.local
 
-# Env (secrets)
-.env
-.env.*
-!.env.example
-
-# Supabase local cache
-supabase/.temp
-
 # Editor directories and files
-.trae
-.trae/documents/
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -32,6 +22,3 @@ supabase/.temp
 *.njsproj
 *.sln
 *.sw?
-
-# Local validation artifacts
-validation_*.json

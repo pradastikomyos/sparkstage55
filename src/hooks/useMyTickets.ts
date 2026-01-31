@@ -34,10 +34,9 @@ type PurchasedTicketRow = {
 
 export function useMyTickets(userId: string | null | undefined) {
     const queryClient = useQueryClient();
-    const queryKey = ['my-tickets', userId];
 
     const query = useQuery({
-        queryKey,
+        queryKey: ['my-tickets', userId],
         queryFn: async () => {
             if (!userId) return [];
 
@@ -96,7 +95,7 @@ export function useMyTickets(userId: string | null | undefined) {
                 'postgres_changes',
                 { event: '*', schema: 'public', table: 'purchased_tickets', filter: `user_id=eq.${userId}` },
                 () => {
-                    queryClient.invalidateQueries({ queryKey });
+                    queryClient.invalidateQueries({ queryKey: ['my-tickets', userId] });
                 }
             )
             .subscribe();

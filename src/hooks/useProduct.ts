@@ -7,13 +7,33 @@ type Variant = {
     price: number;
     available: number;
     imageUrl?: string;
-    attributes: Record<string, any>;
+    attributes: Record<string, unknown>;
 };
 
 type ProductImageRow = {
     image_url: string;
     is_primary: boolean;
     display_order: number;
+};
+
+type ProductVariantRow = {
+    id: number;
+    name: string;
+    price: number | string | null;
+    attributes: Record<string, unknown> | null;
+    is_active?: boolean | null;
+    stock?: number | null;
+    reserved_stock?: number | null;
+};
+
+type ProductRow = {
+    id: number;
+    name: string;
+    description: string | null;
+    image_url?: string | null;
+    categories?: Array<{ name: string; slug: string }> | null;
+    product_images?: ProductImageRow[] | null;
+    product_variants?: ProductVariantRow[] | null;
 };
 
 export type ProductDetail = {
@@ -38,6 +58,7 @@ export function useProduct(slug: string | undefined) {
                     `
           id,
           name,
+          image_url,
           description,
           slug,
           categories(name, slug),
@@ -51,7 +72,7 @@ export function useProduct(slug: string | undefined) {
             if (error) throw error;
             if (!data) throw new Error('Product not found');
 
-            const productRow = data as any;
+            const productRow = data as unknown as ProductRow;
             const productImages = (productRow.product_images || []) as ProductImageRow[];
             const sortedProductImages = productImages
                 .slice()
@@ -62,15 +83,16 @@ export function useProduct(slug: string | undefined) {
             const imageUrls = sortedProductImages.map((img) => img.image_url).filter(Boolean);
             const primaryImageUrl = productRow.image_url || imageUrls[0] || undefined;
 
-            const variants = (productRow.product_variants || []) as any[];
+            const variants = (productRow.product_variants || []) as ProductVariantRow[];
 
             const mappedVariants: Variant[] = variants
                 .filter((v) => v.is_active !== false)
                 .map((v) => {
                     const price = typeof v.price === 'number' ? v.price : Number(v.price ?? 0);
                     const available = Math.max(0, (v.stock ?? 0) - (v.reserved_stock ?? 0));
-                    const attributes = v.attributes || {};
-                    const imageUrl = attributes.image_url || undefined;
+                    const attributes = v.attributes ?? {};
+                    const imageUrl =
+                        typeof attributes.image_url === 'string' ? attributes.image_url : undefined;
                     return {
                         id: Number(v.id),
                         name: String(v.name),
@@ -88,7 +110,7 @@ export function useProduct(slug: string | undefined) {
                 imageUrl: primaryImageUrl,
                 imageUrls: imageUrls.length > 0 ? imageUrls : [primaryImageUrl].filter(Boolean) as string[],
                 variants: mappedVariants,
-                category: productRow.categories,
+                category: productRow.categories?.[0],
             };
         },
         enabled: !!slug,

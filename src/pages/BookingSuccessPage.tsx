@@ -6,8 +6,8 @@ import Button from '@/components/ui/Button';
 import { CheckCircle, Clock, XCircle, ArrowLeft } from 'lucide-react';
 
 interface LocationState {
-    data?: any; // Order or Reservation data
-    paymentResult?: any;
+    data?: { id?: string | number; type?: string };
+    paymentResult?: unknown;
     isPending?: boolean;
 }
 
@@ -18,7 +18,6 @@ export default function BookingSuccessPage() {
 
     // State from navigation or fallback
     const state = location.state as LocationState;
-    const orderNumber = searchParams.get('order_id');
     const orderId = state?.data?.id || searchParams.get('id');
     const type = state?.data?.type || searchParams.get('type') || 'reservation';
 
@@ -27,50 +26,25 @@ export default function BookingSuccessPage() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!orderId && !orderNumber) {
+        if (!orderId) {
             setLoading(false);
             return;
         }
 
         const checkStatus = async () => {
-            // Spark studio ticket payment flow uses orders table keyed by order_number
-            const tableName = orderNumber ? 'orders' : (type === 'reservation' ? 'reservations' : 'order_products');
+            const tableName = type === 'reservation' ? 'reservations' : 'order_products';
 
             try {
-                const query = supabase.from(tableName as any).select('*');
-                const { data, error } = orderNumber
-                    ? await query.eq('order_number', orderNumber).single()
-                    : await query.eq('id', orderId).single();
+                const { data, error } = await supabase
+                    .from(tableName)
+                    .select('*')
+                    .eq('id', orderId)
+                    .single();
 
                 if (error) throw error;
 
                 if (data) {
                     setStatus(data.payment_status || data.status);
-
-                    // Ticket purchase: load purchased ticket codes once order is paid
-                    if (orderNumber && (data.status === 'paid' || data.status === 'active')) {
-                        const { data: orderItems } = await supabase
-                            .from('order_items')
-                            .select('id')
-                            .eq('order_id', data.id);
-
-                        const orderItemIds = Array.isArray(orderItems) ? orderItems.map((r: any) => r.id) : [];
-                        if (orderItemIds.length > 0) {
-                            const { data: purchasedTickets } = await supabase
-                                .from('purchased_tickets')
-                                .select('ticket_code')
-                                .in('order_item_id', orderItemIds)
-                                .limit(1);
-
-                            const firstCode = Array.isArray(purchasedTickets) ? purchasedTickets[0]?.ticket_code : null;
-                            setTicketCode(firstCode || orderNumber);
-                        } else {
-                            setTicketCode(orderNumber);
-                        }
-                        return;
-                    }
-
-                    // Reservation / product pickup fallback
                     if (data.payment_status === 'paid' || data.status === 'paid' || data.status === 'active') {
                         setTicketCode(data.ticket_code || data.pickup_code || `RES-${data.id}`);
                     }
@@ -92,7 +66,7 @@ export default function BookingSuccessPage() {
         return () => {
             if (interval) clearInterval(interval);
         };
-    }, [orderId, orderNumber, type, status]);
+    }, [orderId, type, status]);
 
     if (loading) {
         return (

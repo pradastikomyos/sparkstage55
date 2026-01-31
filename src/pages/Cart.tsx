@@ -5,7 +5,12 @@ import { useCart } from '@/hooks/useCart';
 import Button from '@/components/ui/Button';
 
 const Cart: React.FC = () => {
-    const { items, removeItem, updateQuantity, totalPrice, totalItems, clearCart } = useCart();
+    const items = useCart((state) => state.items);
+    const removeItem = useCart((state) => state.removeItem);
+    const updateQuantity = useCart((state) => state.updateQuantity);
+    const clearCart = useCart((state) => state.clearCart);
+    const totalItems = useCart((state) => state.totalItems());
+    const totalPrice = useCart((state) => state.totalPrice());
 
     if (items.length === 0) {
         return (
@@ -121,8 +126,8 @@ const Cart: React.FC = () => {
 
                         <div className="space-y-4 mb-8">
                             <div className="flex justify-between text-sm uppercase font-bold text-gray-500">
-                                <span>Subtotal ({totalItems()} items)</span>
-                                <span>Rp {totalPrice().toLocaleString('id-ID')}</span>
+                                <span>Subtotal ({totalItems} items)</span>
+                                <span>Rp {totalPrice.toLocaleString('id-ID')}</span>
                             </div>
                             <div className="flex justify-between text-sm uppercase font-bold text-gray-500">
                                 <span>Shipping</span>
@@ -131,7 +136,7 @@ const Cart: React.FC = () => {
                             <div className="pt-6 border-t border-gray-200 mt-6 flex justify-between items-end">
                                 <span className="text-xs uppercase font-black tracking-widest text-gray-900">Total</span>
                                 <span className="text-4xl font-serif font-black text-main-500">
-                                    Rp {totalPrice().toLocaleString('id-ID')}
+                                    Rp {totalPrice.toLocaleString('id-ID')}
                                 </span>
                             </div>
                         </div>
