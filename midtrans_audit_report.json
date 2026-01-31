@@ -1,0 +1,46 @@
+{
+  "audit": "midtrans",
+  "edge_functions": {
+    "status": "MATCH_LOGIC_LAYOUT_MISMATCH",
+    "source_layout": "Spark studio/supabase/functions/<slug>/index.ts",
+    "target_layout": "sparkstage55/supabase/<slug>/index.ts",
+    "functions": [
+      "create-midtrans-token",
+      "create-midtrans-product-token",
+      "midtrans-webhook",
+      "sync-midtrans-status",
+      "complete-product-pickup"
+    ]
+  },
+  "frontend_integration": {
+    "payment_page": {
+      "status": "MISMATCH",
+      "issues": [
+        "Request body shape to create-midtrans-token does not match Edge Function contract (Edge expects items/customerName/customerEmail/customerPhone).",
+        "Client marks orders as paid on Snap onSuccess (should rely on webhook/status sync).",
+        "Success redirect params mismatch: Edge uses ?order_id=..., target reads ?id & ?type.",
+        "No product checkout caller for create-midtrans-product-token found in sparkstage55."
+      ]
+    }
+  },
+  "env_variables": {
+    "status": "MATCH",
+    "required": [
+      "VITE_SUPABASE_URL",
+      "VITE_SUPABASE_ANON_KEY",
+      "VITE_MIDTRANS_CLIENT_KEY",
+      "VITE_MIDTRANS_IS_PRODUCTION",
+      "SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY",
+      "SUPABASE_ANON_KEY",
+      "MIDTRANS_SERVER_KEY",
+      "MIDTRANS_IS_PRODUCTION"
+    ]
+  },
+  "required_sync_actions": [
+    "Sync PaymentPage.tsx to Spark studio implementation (payload, session validation, 401 handling, success redirect handling).",
+    "Stop client-side paid writes; rely on midtrans-webhook + sync-midtrans-status.",
+    "Restructure Supabase functions folder to supabase/functions/<slug>/index.ts."
+  ],
+  "status": "MISMATCH"
+}
